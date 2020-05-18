@@ -12,7 +12,7 @@
     "test": "mocha --recursive -g"
   },
   "dependencies": {
-    "leo-aws": "2.0.0",
+    "leo-aws": "2.0.1",
     "leo-config": "1.1.0",
     "netmask": "^1.0.6"
   },
