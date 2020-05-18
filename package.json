@@ -1,6 +1,6 @@
 {
   "name": "leo-auth",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Auth sdk",
   "homepage": "https://leoplatform.io",
   "main": "index.js",
