@@ -1,6 +1,6 @@
 {
   "name": "leo-auth",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Auth sdk",
   "homepage": "https://leoplatform.io",
   "main": "index.js",
@@ -12,7 +12,7 @@
     "test": "mocha --recursive -g"
   },
   "dependencies": {
-    "leo-aws": "2.0.1",
+    "leo-aws": "^2.0.2",
     "leo-config": "1.1.0",
     "netmask": "^1.0.6"
   },
