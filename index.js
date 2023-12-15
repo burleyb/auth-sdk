@@ -20,7 +20,6 @@ const merge = require('lodash.merge');
 
 const chunk = require('./lib/chunker');
 var policy = require("./lib/policy");
-//let dynamodb = require("leo-aws").dynamodb;
 let dynamodb = getDDBClient();
 let { ConfigProviderChain, ProvidersInputType, GenericConfiguration, Provider } = require("./lib/provider-chain")
 

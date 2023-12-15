@@ -20,7 +20,6 @@
     "@aws-sdk/client-secrets-manager": "^3.445.0",
     "@aws-sdk/lib-dynamodb": "^3.449.0",
     "@aws-sdk/node-http-handler": "^3.374.0",
-    "leo-aws": "2.0.1",
     "leo-config": "1.1.0",
     "lodash.merge": "^4.6.2",
     "netmask": "^1.0.6"
