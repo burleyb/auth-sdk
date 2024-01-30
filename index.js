@@ -27,8 +27,8 @@ let globalConfig = new ConfigProviderChain('leoauth', [function() {
 	return new GenericConfiguration(() => {
 		let config = require("leo-config");
 
-		let values = config.leosdk || config.leo_sdk || config["leo-sdk"] ||
-			config.rstreamssdk || config.rstreams_sdk || config["rstreams-sdk"];
+		let values = config.leoauth || config.leo_auth || config["leo-auth"] ||
+			config.rstreamsauth || config.rstreams_auth || config["rstreams-auth"];
 		if (values == null) {
 			throw util.error(
 				new Error(`Unable to get config from leo-config env ${config.env}`),
