@@ -11,6 +11,7 @@ let authConfig = {};
 function wrapUser(user) {
 	user.authorize = async function(event, resource) {
 		var request = createRequest(event, resource);
+		// console.log("--- request ---", request)
 		user.cognitoId = request.cognito.id;
 		let statements = [];
 		if (authConfig.statements) {
@@ -34,12 +35,15 @@ function wrapUser(user) {
 				});
 			}
 		}
+		user.identities.map(i => request['user:identity:'+i] = true);
 		var result = policy.validate(request, policy.contextify(user.context, statements));
 		if (result.auth !== true) {
 			throw "Access Denied";
 		}
+		// console.log("--- result ---", result)
 		return user;
 	};
+	// console.log("--- user ---", user)
 	return user;
 }
 
@@ -84,6 +88,7 @@ module.exports = {
 		if (id && id.requestContext) {
 			id = id.requestContext;
 		}
+		// console.log("--- getUser id ---", id)
 
 		if (!id) {
 			return wrapUser({
@@ -107,6 +112,7 @@ module.exports = {
 			return dynamodb.get(USER_TABLE, id, {
 				id: "identity_id"
 			}).then(data => {
+				// console.log("--- getUser data ---", data)
 				if (!data || data.identity_id !== id) {
 					return wrapUser({
 						context: {},
