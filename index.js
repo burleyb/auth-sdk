@@ -20,6 +20,7 @@ function wrapUser(user) {
 			});
 		} else {
 			let data = await dynamodb.batchGetHashkey(AUTH_TABLE, "identity", user.identities.concat('*'), {});
+			// console.log("--- data ---", data)
 			if (!resource.context) {
 				resource.context = [];
 			}
