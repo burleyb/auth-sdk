@@ -1,13 +1,153 @@
-let config = require("leo-config");
-var policy = require("./lib/policy");
-let dynamodb = require("leo-aws").dynamodb;
+if ((process.env.LEO_ENVIRONMENT || process.env.NODE_ENV) == null) {
+	let env = ((process.env.AWS_LAMBDA_FUNCTION_NAME ?? '').match(/\W((?:dev|test|stage|staging|prod).*?)(?:\W|$)/i) ??
+		[])[1];
 
-let USER_TABLE = config.leoauth.LeoAuthUser;
-let AUTH_TABLE = config.leoauth.LeoAuth;
+	if (env != null) {
+		process.env.LEO_ENVIRONMENT = env;
+	}
+}
+if (process.env.AWS_REGION == null) {
+	process.env.AWS_REGION = "us-east-1";
+}
+
+
+
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocument } = require("@aws-sdk/lib-dynamodb");
+const { NodeHttpHandler } = require('@aws-sdk/node-http-handler');
+const https = require("https");
+const merge = require('lodash.merge');
+
+const chunk = require('./lib/chunker');
+var policy = require("./lib/policy");
+let dynamodb = getDDBClient();
+let { ConfigProviderChain, ProvidersInputType, GenericConfiguration, Provider } = require("./lib/provider-chain")
+
+let globalConfig = new ConfigProviderChain('leoauth', [function() {
+	return new GenericConfiguration(() => {
+		let config = require("leo-config");
+
+		let values = config.leoauth || config.leo_auth || config["leo-auth"] ||
+			config.rstreamsauth || config.rstreams_auth || config["rstreams-auth"];
+		if (values == null) {
+			throw util.error(
+				new Error(`Unable to get config from leo-config env ${config.env}`),
+				{ code: 'LeoAuthConfigurationProviderFailure' }
+			);
+		}
+
+		return values
+	});
+}], ProvidersInputType.Prepend).resolve();
+
+let USER_TABLE = globalConfig.LeoAuthUser;
+let AUTH_TABLE = globalConfig.LeoAuth;
 
 
 let authConfig = {};
 
+function getDDBClient(configure = {}) {
+	let docClient = DynamoDBDocument.from(new DynamoDBClient({
+		region: configure.region || (configure.aws && configure.aws.region),
+		maxAttempts: 3,
+		requestHandler: new NodeHttpHandler({
+			connectionTimeout: parseInt(process.env.DYNAMODB_CONNECT_TIMEOUT_MS, 10) || 2000,
+			requestTimeout: parseInt(process.env.DYNAMODB_TIMEOUT_MS, 10) || 5000,
+			httpsAgent: new https.Agent({
+				ciphers: 'ALL',
+			})
+		}),
+		credentials: configure.credentials
+	}), {
+		marshallOptions: {
+			convertEmptyValues: true
+		}
+	})
+	return {
+		batchGetHashkey: function(table, hashkey, ids, opts = {}) {
+			return this.batchGetTable(table, ids.map((e) => {
+				let ret = {};
+				ret[hashkey] = e;
+				return ret;
+			}), opts).then(results => {
+				let result = {};
+				for (let i = 0; i < results.length; i++) {
+					let row = results[i];
+					result[row[hashkey]] = row;
+				}
+				return result;
+			});
+		},
+		batchGetTable: (table, keys, opts = {}) => {
+			return new Promise((resolve, reject) => {
+				opts = merge({
+					chunk_size: 100,
+					concurrency: 3
+				}, opts);
+				let uniquemap = {};
+				let results = [];
+				let chunker = chunk(function(items, done) {
+					if (items.length > 0) {
+						let params = {
+							RequestItems: {},
+							ReturnConsumedCapacity: 'TOTAL',
+						};
+						params.RequestItems[table] = {
+							Keys: items
+						};
+						docClient.batchGet(params, function(err, data) {
+							if (err) {
+								logger.error(err);
+								done(err, items);
+							} else {
+								results = results.concat(data.Responses[table]);
+								done(null, []);
+							}
+						});
+					} else {
+						done(null, []);
+					}
+				}, opts);
+
+				for (let i = 0; i < keys.length; i++) {
+					let identifier = JSON.stringify(keys[i]);
+					if (!(identifier in uniquemap)) {
+						uniquemap[identifier] = 1;
+						chunker.add(keys[i]);
+					}
+				}
+
+				chunker.end((err, rs) => {
+					if (err) {
+						reject(err);
+					} else {
+						resolve(results);
+					}
+				});
+			});
+		},
+		get: (table, id, opts = {}) => {
+			let key = id;
+			if (typeof key !== 'object') {
+				key = {
+					[opts.id || 'id']: key,
+				};
+			}
+			return docClient.get({
+				ConsistentRead: true,
+				Key: key,
+				ReturnConsumedCapacity: 'TOTAL',
+				TableName: table,
+			}).then(data => {
+				if (!data.Item) {
+					return opts.default || null;
+				} else {
+					return data.Item;
+				}
+			});
+		},
+	}
+}
 function wrapUser(user) {
 	user.authorize = async function(event, resource) {
 		var request = createRequest(event, resource);
@@ -84,12 +224,50 @@ function createRequest(event, resource) {
 };
 
 
+function getPassedContext(event, body) {
+	body = body || event.body || {};
+	if (typeof body === 'string') {
+		try {
+			body = JSON.parse(body) || {};
+		} catch (e) {
+			body = {};
+		}
+	}
+	const context = Object.entries(event.queryStringParameters || {}).reduce(
+		(ctx, [key, value]) => {
+			let k;
+			if ((k = key.match(/^ctx[_-](.*)$/))) {
+				ctx[k[1]] = value;
+			}
+			return ctx;
+		},
+		body._context || {}
+	);
+	//delete body._context;
+	return context;
+}
+
 module.exports = {
+	configuration: {
+		LeoAuth: AUTH_TABLE,
+		LeoAuthUser: USER_TABLE
+	},
 	getUser: async function(id) {
+		let origId = id;
 		if (id && id.requestContext) {
 			id = id.requestContext;
 		}
-		// console.log("--- getUser id ---", id)
+		let passedContext = {};
+
+		// Admin caller. Check for proxy cognitoIdentityId
+		if (id && id.identity && !id.identity.cognitoIdentityId && id.identity.caller) {
+			passedContext = getPassedContext(origId);
+			if (passedContext.cognitoIdentityId) {
+				id.identity.cognitoIdentityId = passedContext.cognitoIdentityId;
+				//delete id.identity.caller;
+				//delete passedContext.cognitoIdentityId
+			}
+		}
 
 		if (!id) {
 			return wrapUser({
@@ -100,9 +278,9 @@ module.exports = {
 		} else if (id && id.identity && !id.identity.cognitoIdentityId && id.identity.caller) {
 			return wrapUser({
 				identity_id: "aws_key",
-				context: {
+				context: Object.assign(passedContext, {
 					key: id.identity.caller
-				},
+				}),
 				identities: ["role/aws_key"]
 			});
 		} else {
@@ -132,12 +310,12 @@ module.exports = {
 	},
 	authorize: async function(event, resource, user = null) {
 		if (user) {
-			if (!(authorize in user)) {
+			if (!("authorize" in user)) {
 				wrapUser(user);
 			}
 			return user.authorize(event, resource);
 		} else {
-			return this.getUser(event.requestContext).then(user => user.authorize(event, resource));
+			return module.exports.getUser(event).then(user => user.authorize(event, resource));
 		}
 	},
 	bootstrap: function(config) {
