@@ -151,7 +151,7 @@ function getDDBClient(configure = {}) {
 function wrapUser(user) {
 	user.authorize = async function(event, resource) {
 		var request = createRequest(event, resource);
-		// console.log("--- request ---", request)
+		console.log("--- request ---", request)
 		user.cognitoId = request.cognito.id;
 		let statements = [];
 		if (authConfig.statements) {
@@ -309,6 +309,7 @@ module.exports = {
 		}
 	},
 	authorize: async function(event, resource, user = null) {
+		console.log("[user]", user)
 		if (user) {
 			if (!("authorize" in user)) {
 				wrapUser(user);
