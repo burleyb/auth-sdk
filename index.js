@@ -16,12 +16,13 @@ const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const { DynamoDBDocument } = require("@aws-sdk/lib-dynamodb");
 const { NodeHttpHandler } = require('@aws-sdk/node-http-handler');
 const https = require("https");
+const logger = require("leo-logger");
 const merge = require('lodash.merge');
 
 const chunk = require('./lib/chunker');
 var policy = require("./lib/policy");
 let dynamodb = getDDBClient();
-let { ConfigProviderChain, ProvidersInputType, GenericConfiguration, Provider } = require("./lib/provider-chain")
+let { ConfigProviderChain, ProvidersInputType, GenericConfiguration } = require("./lib/provider-chain")
 
 let globalConfig = new ConfigProviderChain('leoauth', [function() {
 	return new GenericConfiguration(() => {
@@ -30,10 +31,8 @@ let globalConfig = new ConfigProviderChain('leoauth', [function() {
 		let values = config.leoauth || config.leo_auth || config["leo-auth"] ||
 			config.rstreamsauth || config.rstreams_auth || config["rstreams-auth"];
 		if (values == null) {
-			throw util.error(
-				new Error(`Unable to get config from leo-config env ${config.env}`),
-				{ code: 'LeoAuthConfigurationProviderFailure' }
-			);
+			throw new Error(`Unable to get config from leo-config env ${config.env}`)
+			
 		}
 
 		return values
@@ -51,7 +50,9 @@ function getDDBClient(configure = {}) {
 		region: configure.region || (configure.aws && configure.aws.region),
 		maxAttempts: 3,
 		requestHandler: new NodeHttpHandler({
+			// @ts-ignore
 			connectionTimeout: parseInt(process.env.DYNAMODB_CONNECT_TIMEOUT_MS, 10) || 2000,
+			// @ts-ignore
 			requestTimeout: parseInt(process.env.DYNAMODB_TIMEOUT_MS, 10) || 5000,
 			httpsAgent: new https.Agent({
 				ciphers: 'ALL',
@@ -95,11 +96,14 @@ function getDDBClient(configure = {}) {
 						params.RequestItems[table] = {
 							Keys: items
 						};
+						// @ts-ignore
 						docClient.batchGet(params, function(err, data) {
 							if (err) {
+								// @ts-ignore
 								logger.error(err);
 								done(err, items);
 							} else {
+								// @ts-ignore
 								results = results.concat(data.Responses[table]);
 								done(null, []);
 							}
@@ -314,6 +318,7 @@ module.exports = {
 			if (!("authorize" in user)) {
 				wrapUser(user);
 			}
+			// @ts-ignore
 			return user.authorize(event, resource);
 		} else {
 			return module.exports.getUser(event).then(user => user.authorize(event, resource));
