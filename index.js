@@ -313,7 +313,7 @@ module.exports = {
 		}
 	},
 	authorize: async function(event, resource, user = null) {
-		console.log("[user]", user)
+	
 		if (user) {
 			if (!("authorize" in user)) {
 				wrapUser(user);
