@@ -19,14 +19,14 @@ describe('lib/conditions', function () {
 
 	it("matches ip address block", () => {
 		assert(conditions.IpAddress({
-			a: "127.0.0.1/16"
-		}, "a", ["127.0.0.2"]), "should match")
+			a: "127.0.0.2"
+		}, "a", ["127.0.0.2/32"]), "should match")
 	});
 
 	it("does not matche ip address", () => {
 		assert(conditions.IpAddress({
 			a: "127.0.0.1"
-		}, "a", ["127.0.0.2"]), "should not match")
+		}, "a", ["127.0.0.2"]) === false, "should not match")
 	});
 
 	it("wrong field", () => {
