@@ -27,16 +27,21 @@ jobs:
         run: echo "##[set-output name=version;]$(echo ${GITHUB_REF#refs/tags/v})"
         id: extract_version
 
+      - name: Remove Tag from version
+        shell: bash
+        run: echo "##[set-output name=value;]"$(echo "${{steps.extract_version.outputs.version}}" | awk -F'-' '{print $1}')
+        id: version
+
       - name: Extract npm Tag from Tag Tag
         shell: bash
         run: echo "##[set-output name=tag;]$(echo ${GITHUB_REF#refs/tags/v*-})"
         id: extract_tag
 
       - run: echo ref ${{github.ref}}
-      - run: echo version ${{steps.extract_version.outputs.version}}
+      - run: echo version ${{steps.version.outputs.value}}
       - run: echo tag ${{steps.extract_tag.outputs.tag}}
 
-      - run: npm version ${{steps.extract_version.outputs.version}} --no-git-tag-version --allow-same-version
+      - run: npm version ${{steps.version.outputs.value}} --no-git-tag-version --allow-same-version
 
       - if: steps.extract_tag.outputs.tag == github.ref
         run: npm publish
