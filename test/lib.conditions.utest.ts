@@ -11,6 +11,24 @@ import { flattenRequest } from "../lib/policy";
 
 
 describe('lib/conditions', function () {
+	it("matches ip address", () => {
+		assert(conditions.IpAddress({
+			a: "127.0.0.1"
+		}, "a", ["127.0.0.1"]), "should match")
+	});
+
+	it("matches ip address block", () => {
+		assert(conditions.IpAddress({
+			a: "127.0.0.1/16"
+		}, "a", ["127.0.0.2"]), "should match")
+	});
+
+	it("does not matche ip address", () => {
+		assert(conditions.IpAddress({
+			a: "127.0.0.1"
+		}, "a", ["127.0.0.2"]), "should not match")
+	});
+
 	it("wrong field", () => {
 		["StringLike", "StringNotLike", "StringEquals", "StringNotEquals", "IpAddress"].forEach((c) => {
 			assert(!conditions[c]({
